@@ -69,7 +69,24 @@ struct RouteHandlerMapping {
 }
 
 class MockNIOHTTPRouter: MockHttpRouter {
-    private var routes = [MockHTTPMethod: [RouteHandlerMapping]]()
+    private let lockQueue = DispatchQueue(label: "routes.lock.queue")
+    private var _routesOnlyAvailableViaLockQueue = [MockHTTPMethod: [RouteHandlerMapping]]()
+    private var routes: [MockHTTPMethod: [RouteHandlerMapping]] {
+        get {
+            var value = [MockHTTPMethod: [RouteHandlerMapping]]()
+            lockQueue.sync { [weak self] in
+                guard let self else { return }
+                value = self._routesOnlyAvailableViaLockQueue
+            }
+            return value
+        }
+        set(newValue) {
+            lockQueue.async { [weak self] in
+                guard let self else { return }
+                self._routesOnlyAvailableViaLockQueue = newValue
+            }
+        }
+    }
     
     var requiresRouteMiddleware: Bool {
         !routes.isEmpty
